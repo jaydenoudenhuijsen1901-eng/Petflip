@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>PS99 Gamble Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; background: #f4f4f4; }
+    h1 { color: #333; }
+    .hidden { display: none; }
+    .inventory { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+    .item { border: 2px solid #333; border-radius: 10px; padding: 10px; cursor: pointer; width: 150px; background: white; }
+    .selected { background: gold; }
+    button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+    #wheel { width: 200px; height: 200px; border: 5px solid black; border-radius: 50%; margin: 20px auto; display: flex; align-items: center; justify-content: center; font-size: 30px; background: white; }
+    .balance { font-size: 20px; margin: 20px; }
+  </style>
+</head>
+<body>
+  <h1>🐾 PS99 Gamble Demo</h1>
+
+  <div id="auth">
+    <h2>Login / Registreren</h2>
+    <input type="text" id="username" placeholder="Gebruikersnaam">
+    <input type="password" id="password" placeholder="Wachtwoord">
+    <br><br>
+    <button onclick="register()">📑 Registreren</button>
+    <button onclick="login()">🔑 Inloggen</button>
+    <p id="authMsg"></p>
+  </div>
+
+  <div id="game" class="hidden">
+    <h2>Welkom, <span id="currentUser"></span>!</h2>
+    <button onclick="logout()">🚪 Uitloggen</button>
+
+    <div class="balance">Totale Value: 💎 <span id="balance">0</span></div>
+
+    <h2>Inventory</h2>
+    <div class="inventory" id="inventory"></div>
+    <p>Geselecteerd: <span id="selectedItem">geen</span></p>
+
+    <h2>Deposit / Withdraw</h2>
+    <input type="text" id="depositName" placeholder="Pet naam">
+    <input type="number" id="depositValue" placeholder="Waarde">
+    <button onclick="deposit()">➕ Deposit</button>
+    <button onclick="withdraw()">➖ Withdraw geselecteerde</button>
+    <p id="depositResult"></p>
+
+    <h2>🪙 Coinflip</h2>
+    <button onclick="coinflip()">Flip met pet</button>
+    <p id="coinflipResult"></p>
+
+    <h2>🎡 Spin Wheel</h2>
+    <button onclick="spinWheel()">Spin met pet</button>
+    <div id="wheel">?</div>
+    <p id="wheelResult"></p>
+  </div>
+
+  <script>
+    let users = JSON.parse(localStorage.getItem("ps99_users") || "{}");
+    let currentUser = null;
+    let selected = null;
+
+    function register() {
+      let username = document.getElementById("username").value;
+      let password = document.getElementById("password").value;
+      if (!username || !password) return showMsg("authMsg", "❌ Vul alles in!");
+      if (users[username]) return showMsg("authMsg", "❌ Gebruiker bestaat al!");
+      users[username] = {
+        password: password,
+        inventory: [
+          { name: "Huge Cat", value: 5400000000, icon: "😺" },
+          { name: "Rainbow Huge Cat", value: 10500000000, icon: "🌈😺" },
+          { name: "Golden Huge Pumpkin Cat", value: 290000000, icon: "🎃✨" }
+        ]
+      };
+      saveUsers();
+      showMsg("authMsg", "✅ Account aangemaakt, je kan nu inloggen!");
+    }
+
+    function login() {
+      let username = document.getElementById("username").value;
+      let password = document.getElementById("password").value;
+      if (!users[username] || users[username].password !== password) {
+        return showMsg("authMsg", "❌ Ongeldige login!");
+      }
+      currentUser = username;
+      document.getElementById("currentUser").textContent = currentUser;
+      document.getElementById("auth").classList.add("hidden");
+      document.getElementById("game").classList.remove("hidden");
+      renderInventory();
+      showMsg("authMsg", "");
+    }
+
+    function logout() {
+      currentUser = null;
+      selected = null;
+      document.getElementById("auth").classList.remove("hidden");
+      document.getElementById("game").classList.add("hidden");
+    }
+
+    function saveUsers() {
+      localStorage.setItem("ps99_users", JSON.stringify(users));
+    }
+
+    function showMsg(id, msg) {
+      document.getElementById(id).textContent = msg;
+    }
+
+    function calcBalance() {
+      let total = users[currentUser].inventory.reduce((sum, item) => sum + item.value, 0);
+      document.getElementById("balance").textContent = total.toLocaleString();
+    }
+
+    function renderInventory() {
+      let container = document.getElementById("inventory");
+      container.innerHTML = "";
+      let inv = users[currentUser].inventory;
+      inv.forEach((item, index) => {
+        let div = document.createElement("div");
+        div.className = "item" + (selected === index ? " selected" : "");
+        div.innerHTML = `<div style="font-size:40px">${item.icon}</div>
+                         <b>${item.name}</b><br>💎 ${item.value.toLocaleString()}`;
+        div.onclick = () => {
+          selected = index;
+          document.getElementById("selectedItem").textContent = item.name + " (💎" + item.value.toLocaleString() + ")";
+          renderInventory();
+        };
+        container.appendChild(div);
+      });
+      if (inv.length === 0) {
+        container.textContent = "Geen pets meer!";
+        document.getElementById("selectedItem").textContent = "geen";
+      }
+      calcBalance();
+      saveUsers();
+    }
+
+    function deposit() {
+      let name = document.getElementById("depositName").value;
+      let value = parseInt(document.getElementById("depositValue").value);
+      if (!name || isNaN(value) || value <= 0) {
+        return showMsg("depositResult", "❌ Ongeldige input!");
+      }
+      users[currentUser].inventory.push({ name: name, value: value, icon: "✨" });
+      showMsg("depositResult", `✅ ${name} toegevoegd met waarde 💎${value}`);
+      document.getElementById("depositName").value = "";
+      document.getElementById("depositValue").value = "";
+      renderInventory();
+    }
+
+    function withdraw() {
+      if (selected === null) return alert("Selecteer eerst een pet!");
+      let pet = users[currentUser].inventory[selected];
+      users[currentUser].inventory.splice(selected, 1);
+      selected = null;
+      showMsg("depositResult", `📤 Je hebt ${pet.name} (💎${pet.value}) uit je inventory gehaald.`);
+      renderInventory();
+    }
+
+    function coinflip() {
+      if (selected === null) return alert("Selecteer eerst een pet!");
+      let inv = users[currentUser].inventory;
+      let pet = inv[selected];
+      let win = Math.random() < 0.5;
+      if (win) {
+        inv.push({ ...pet });
+        showMsg("coinflipResult", "✅ Je won! Je kreeg een extra " + pet.name);
+      } else {
+        inv.splice(selected, 1);
+        selected = null;
+        showMsg("coinflipResult", "❌ Je verloor! Pet weg.");
+      }
+      renderInventory();
+    }
+
+    function spinWheel() {
+      if (selected === null) return alert("Selecteer eerst een pet!");
+      let inv = users[currentUser].inventory;
+      let pet = inv[selected];
+      let multipliers = [0, 0.5, 1, 2, 5];
+      let multiplier = multipliers[Math.floor(Math.random() * multipliers.length)];
+      let newValue = Math.floor(pet.value * multiplier);
+
+      inv.splice(selected, 1);
+      selected = null;
+
+      if (newValue > 0) {
+        inv.push({ name: "Win-" + pet.name, value: newValue, icon: "✨" });
+        showMsg("wheelResult", "🎉 Je won een pet van waarde 💎" + newValue.toLocaleString());
+      } else {
+        showMsg("wheelResult", "❌ Helaas, verloren!");
+      }
+
+      document.getElementById("wheel").textContent = "x" + multiplier;
+      renderInventory();
+    }
+  </script>
+</body>
+</html>
